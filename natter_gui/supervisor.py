@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .core import CORE, CoreStatus, command, protocols, validate_service, validate_collection, ID
 from .store import atomic_json
+from .diagnostics import Diagnostics, explain_nat
 
 
 class Worker:
@@ -124,6 +125,7 @@ class Manager:
         self.nat_thread = None
         self.nat_proc = None
         self.closed = False
+        self.diagnostics = Diagnostics()
 
     def boot(self):
         with self.lock:
@@ -238,7 +240,7 @@ class Manager:
         with self.lock:
             if self.nat_thread and self.nat_thread.is_alive():
                 raise ValueError("NAT 检测正在运行")
-            self.nat = {"state": "running", "raw": "", "results": []}
+            self.nat = {"state": "running", "raw": "", "results": [], "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
             self.nat_thread = threading.Thread(target=self._nat_job, daemon=True)
             self.nat_thread.start()
 
@@ -254,7 +256,7 @@ class Manager:
                 self.nat_proc = proc
             output, _ = proc.communicate(timeout=150)
             raw = output.decode("utf-8", errors="replace")
-            results = [{"protocol": m[0].lower(), "status": m[1], "detail": m[2]} for m in
+            results = [explain_nat({"protocol": m[0].lower(), "status": m[1], "detail": m[2]}) for m in
                        re.findall(r"Checking (TCP|UDP) NAT\.\.\.\s*\[\s*(OK|FAIL|NA)\s*\]\s*\.\.\.\s*([^\n]*)", raw)]
             value = {"state": "finished" if proc.returncode == 0 else "error", "raw": raw[-16384:], "results": results}
         except subprocess.TimeoutExpired:
@@ -264,8 +266,18 @@ class Manager:
         except OSError as error:
             value = {"state": "error", "raw": str(error), "results": []}
         with self.lock:
+            value["started_at"] = self.nat.get("started_at")
+            value["finished_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self.nat = value
             self.nat_proc = None
+
+    def check_diagnostics(self, sid=None):
+        with self.lock:
+            if self.closed:
+                raise ValueError("面板正在关闭")
+            if sid is not None:
+                self.get(sid)
+            self.diagnostics.start([s for s in self.snapshot() if sid is None or s["id"] == sid], all_services=sid is None)
 
     def close(self):
         with self.lock:
@@ -277,3 +289,4 @@ class Manager:
                 proc.terminate()
         if self.nat_thread:
             self.nat_thread.join(timeout=5)
+        self.diagnostics.close()

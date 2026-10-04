@@ -51,6 +51,18 @@ class CoreTests(unittest.TestCase):
         status.ingest("udp://192.168.1.2:123 <--Natter--> udp://203.0.113.1:123")
         self.assertEqual(status.wan, "NOT_CHECKED")
 
+    def test_diagnostic_addresses_and_upnp_are_log_evidence_not_lease_verdicts(self):
+        status = CoreStatus()
+        status.ingest("[I] [UPnP] Found router 192.168.1.1")
+        status.ingest("[I] tcp://192.168.1.100:8096 <--socket--> tcp://192.168.1.2:4567 <--Natter--> tcp://203.0.113.1:34569")
+        status.ingest("[I] WAN > 203.0.113.1:34569 [ UNKNOWN ]")
+        result = status.snapshot()
+        self.assertEqual(result["local_address"], {"ip": "192.168.1.2", "port": 4567})
+        self.assertEqual(result["upnp"]["router"], "192.168.1.1")
+        self.assertNotIn("lease_open", result["upnp"])
+        self.assertIsNotNone(result["last_check_at"])
+        self.assertEqual(result["wan"], "UNKNOWN")
+
     def test_input_validation_and_bind_conflicts(self):
         for override in ({"target_ip": ";touch /tmp/injected"}, {"target_port": True}, {"protocol": "tcp;sh"}, {"enabled": "yes"}):
             with self.assertRaises(ValueError):

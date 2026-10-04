@@ -6,6 +6,8 @@ LABEL org.opencontainers.image.title="Natter GUI" \
       io.natter-gui.upstream.revision="${UPSTREAM_REVISION}"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends iproute2 \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 nattergui && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin nattergui \
     && mkdir /data && chown 10001:10001 /data
 COPY natter_gui /app/natter_gui

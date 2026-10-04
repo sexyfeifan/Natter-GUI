@@ -1,5 +1,6 @@
 """Validation, command generation and lossless upstream status extraction."""
 import ipaddress
+import datetime
 import re
 from pathlib import Path
 
@@ -77,6 +78,9 @@ class CoreStatus:
         self.lan = {}
         self.wan = "NOT_CHECKED"
         self.warning = None
+        self.local_address = None
+        self.last_check_at = None
+        self.upnp = {"router": None, "error": None}
 
     def ingest(self, line):
         # A new route means new checks: discard results for the previous mapping.
@@ -84,8 +88,18 @@ class CoreStatus:
             self.lan = {}
             self.wan = "NOT_CHECKED"
             self.warning = None
+            self.last_check_at = None
+            local = re.search(r"(?:tcp|udp)://([\d.]+):(\d+)\s*<--Natter-->", line)
+            if local:
+                self.local_address = {"ip": local[1], "port": int(local[2])}
+        router = re.search(r"\[UPnP\] Found router ([\d.]+)", line)
+        if router:
+            self.upnp["router"] = router[1]
+        if "upnp: failed" in line or "upnp: Error" in line:
+            self.upnp["error"] = line[-500:]
         match = re.search(r"\b(LAN|WAN) >\s*(\S+)\s*\[\s*(OPEN|CLOSED|UNKNOWN)\s*\]", line)
         if match:
+            self.last_check_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
             kind, address, result = match.groups()
             if kind == "WAN":
                 self.wan = result
@@ -96,4 +110,6 @@ class CoreStatus:
                 self.warning = text
 
     def snapshot(self):
-        return {"lan": dict(self.lan), "wan": self.wan, "core_warning": self.warning}
+        return {"lan": dict(self.lan), "wan": self.wan, "core_warning": self.warning,
+                "local_address": dict(self.local_address) if self.local_address else None,
+                "last_check_at": self.last_check_at, "upnp": dict(self.upnp)}

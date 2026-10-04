@@ -80,8 +80,9 @@ class App:
             update = dict(self.update)
         with self.manager.lock:
             nat = dict(self.manager.nat)
+        services = self.manager.snapshot()
         return {"gui_version": __version__, "upstream": manifest, "platform": platform.system() + " / " + platform.machine(),
-                "services": self.manager.snapshot(), "nat": nat, "update": update}
+                "services": services, "nat": nat, "update": update, "diagnostics": self.manager.diagnostics.snapshot(services)}
 
 
 def make_server(app, host, port):
@@ -171,6 +172,15 @@ def make_server(app, host, port):
                 return self.reply(201, app.manager.upsert(self.body()))
             if self.command == "POST" and path == "/api/nat-check":
                 app.manager.check_nat()
+                return self.reply(202, {"ok": True})
+            if self.command == "POST" and path == "/api/diagnostics":
+                data = self.body()
+                if set(data) - {"service_id"}:
+                    raise ValueError("诊断只接受已配置的 service_id，不接受任意目标或命令")
+                sid = data.get("service_id")
+                if sid is not None and (not isinstance(sid, str) or not ID.fullmatch(sid)):
+                    raise ValueError("服务 ID 无效")
+                app.manager.check_diagnostics(sid)
                 return self.reply(202, {"ok": True})
             if self.command == "POST" and path == "/api/upstream-check":
                 app.check_update()

@@ -3,6 +3,7 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from natter_gui.server import App, make_server
@@ -90,3 +91,18 @@ class APITests(unittest.TestCase):
         self.assertEqual(self.request("/")[0], 200)
         self.assertEqual(self.request("/../upstream.lock.json")[0], 401)
         self.assertEqual(self.request("/vendor/natter/natter.py")[0], 401)
+
+    def test_diagnostics_require_auth_csrf_and_only_existing_service_ids(self):
+        self.assertEqual(self.request("/api/diagnostics", "POST", {})[0], 401)
+        self.login()
+        csrf = self.csrf
+        self.csrf = ""
+        self.assertEqual(self.request("/api/diagnostics", "POST", {})[0], 403)
+        self.csrf = csrf
+        for data in ({"service_id": []}, {"service_id": ";sh"}, {"host": "127.0.0.1"}, {"command": "ip route flush"}):
+            self.assertEqual(self.request("/api/diagnostics", "POST", data)[0], 400)
+        self.assertEqual(self.request("/api/diagnostics", "POST", {"service_id": "f" * 12})[0], 404)
+        with patch.object(self.manager.diagnostics, "start") as start:
+            self.assertEqual(self.request("/api/diagnostics", "POST", {})[0], 202)
+            start.assert_called_once_with([], all_services=True)
+        self.assertEqual(self.request("/api/state")[1]["diagnostics"]["state"], "idle")
