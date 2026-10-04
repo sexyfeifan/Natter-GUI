@@ -1,5 +1,7 @@
 # 部署、迁移和回退
 
+希望让 AI Agent 直接完成安装时，可复制 [Agent 安装指南](AGENT-INSTALL.md) 中的完整自然语言指令，填写设备和服务信息后交给具备 SSH / 终端能力的 Agent。
+
 ## 原生 Linux
 
 需要 Python 3.11+、systemd。可选 UID 路由需要 iproute2。安装脚本不自动安装 Docker，也不下载并执行第三方安装脚本。
