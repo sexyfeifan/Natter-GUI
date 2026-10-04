@@ -29,7 +29,9 @@ cd Natter-GUI
 python3 -m natter_gui --host 127.0.0.1 --port 9080 --state-dir .state
 ```
 
-另开终端读取首次登录密码：
+默认管理员密码为 `admin`。没有密码长度或复杂度限制，也不强制首次修改密码。新安装可直接使用默认密码登录；已有配置升级时保留当前密码。
+
+首次密码也记录在运行目录：
 
 ```bash
 cat .state/bootstrap-password.txt
@@ -43,7 +45,7 @@ cat .state/bootstrap-password.txt
 sudo ./scripts/install.sh
 ```
 
-面板地址为 `http://设备IP:9080`，密码文件为 `/var/lib/natter-gui/bootstrap-password.txt`。
+面板地址为 `http://设备IP:9080`，新安装默认密码为 `admin`，首次密码文件为 `/var/lib/natter-gui/bootstrap-password.txt`。
 
 如果设备默认走旁路由，希望面板及其 Natter 进程单独走主路由，可以指定实际网关和网卡：
 

@@ -63,7 +63,7 @@ flowchart TD
 
 ```text
 config.json                 管理员哈希与服务配置，0600
-bootstrap-password.txt      首次密码，0600，修改密码后删除
+bootstrap-password.txt      首次默认密码 admin，0600，修改密码后删除
 <service>-verification.json 人工验证记录及对应映射
 workers/<id>-<protocol>/
   mapping.json              原版通知生成的快照
@@ -71,6 +71,8 @@ workers/<id>-<protocol>/
 ```
 
 管理 API 要求登录，写操作要求 CSRF token；Cookie 为 HttpOnly + SameSite=Strict，支持 HTTPS Secure。密码使用 PBKDF2-SHA256，随机盐和 600000 次迭代。配置导出不包含认证信息。
+
+新安装默认密码为 `admin`，不限制密码长度或复杂度，不强制首次修改。升级保留已有密码，密码重置不修改服务配置。
 
 原生面板以 `natter-gui` 非登录账户运行。UID 路由选项由 root 安装时配置，只影响该账户的流量。Docker 默认非 root 用户和 host 网络，不包含通用 root 管理接口。
 

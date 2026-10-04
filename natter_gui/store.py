@@ -8,6 +8,8 @@ import threading
 
 from .core import validate_service, validate_collection
 
+DEFAULT_PASSWORD = "admin"
+
 
 def atomic_json(path, data):
     path = Path(path)
@@ -24,7 +26,7 @@ class Store:
         self.lock = threading.RLock()
         self.path = self.directory / "config.json"
         if not self.path.exists():
-            password = secrets.token_urlsafe(20)
+            password = DEFAULT_PASSWORD
             data = {"schema_version": 1, "services": [], "auth": self.password_hash(password)}
             atomic_json(self.path, data)
             bootstrap = self.directory / "bootstrap-password.txt"
@@ -43,7 +45,7 @@ class Store:
         return {"salt": salt, "digest": digest, "iterations": 600_000}
 
     def authenticate(self, password):
-        if not isinstance(password, str) or len(password) > 1024:
+        if not isinstance(password, str):
             return False
         with self.lock:
             auth = dict(self.data["auth"])
@@ -51,8 +53,8 @@ class Store:
         return hmac.compare_digest(digest, auth["digest"])
 
     def change_password(self, password):
-        if not isinstance(password, str) or not 12 <= len(password) <= 1024:
-            raise ValueError("新密码需要 12–1024 个字符")
+        if not isinstance(password, str):
+            raise ValueError("新密码必须是字符串")
         with self.lock:
             self.data["auth"] = self.password_hash(password)
             self.save()

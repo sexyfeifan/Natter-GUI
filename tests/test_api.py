@@ -70,10 +70,20 @@ class APITests(unittest.TestCase):
         self.assertNotIn("auth", export)
         self.assertNotIn(self.password, json.dumps(export))
         self.assertEqual(self.request("/api/services/" + s["id"], "DELETE", {})[0], 200)
-        self.assertEqual(self.request("/api/password", "POST", {"current_password": self.password, "new_password": "new-test-password-123"})[0], 200)
+        self.assertEqual(self.request("/api/password", "POST", {"current_password": self.password, "new_password": "x"})[0], 200)
         self.assertEqual(self.request("/api/state")[0], 401)
         self.assertFalse((Path(self.temp.name) / "bootstrap-password.txt").exists())
-        self.assertTrue(self.store.authenticate("new-test-password-123"))
+        self.assertTrue(self.store.authenticate("x"))
+        self.password = "x"
+        self.login()
+        self.assertEqual(self.request("/api/state")[0], 200)
+
+    def test_empty_password_can_be_set_and_used_for_login(self):
+        self.login()
+        self.assertEqual(self.request("/api/password", "POST", {"current_password": self.password, "new_password": ""})[0], 200)
+        self.password = ""
+        self.login()
+        self.assertEqual(self.request("/api/state")[0], 200)
 
     def test_cross_origin_login_rejected_and_static_paths_are_allowlisted(self):
         self.assertEqual(self.request("/api/login", "POST", {"password": self.password}, Origin="https://evil.example")[0], 403)

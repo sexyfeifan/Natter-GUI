@@ -20,7 +20,7 @@ def main():
     store = Store(args.state_dir)
     if args.reset_password:
         import getpass
-        password = getpass.getpass("New password (12+ characters): ")
+        password = getpass.getpass("New password: ")
         if password != getpass.getpass("Repeat password: "):
             parser.error("passwords do not match")
         store.change_password(password)

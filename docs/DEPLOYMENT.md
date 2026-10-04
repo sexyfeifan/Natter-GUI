@@ -13,6 +13,8 @@ journalctl -u natter-gui -n 100 --no-pager
 
 安装代码写入 `/opt/natter-gui/releases/<时间戳>`，`/opt/natter-gui/current` 指向当前版本。状态保存在 `/var/lib/natter-gui`。重复执行安装脚本会保留状态并切换到新的代码目录。
 
+新安装默认管理员密码为 `admin`。密码没有长度或复杂度要求；已有状态目录升级时保持原密码，主动重置时使用文末的密码恢复方法。
+
 默认监听设备所有 IPv4 地址的 9080 端口。可以在 root 管理的 systemd override 中改为指定 LAN 地址或 `127.0.0.1`，再通过 HTTPS 反向代理访问。HTTPS 管理访问配合 `--secure-cookie`。
 
 ### 主路由与旁路由
