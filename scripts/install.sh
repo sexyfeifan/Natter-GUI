@@ -27,6 +27,9 @@ task_release="/opt/natter-gui/releases/$(date -u +%Y%m%dT%H%M%SZ)-$$"
 install -d -m 755 "$task_release" /opt/natter-gui/releases
 cp -R "$task_root/natter_gui" "$task_root/vendor" "$task_root/scripts" "$task_release/"
 cp "$task_root/upstream.lock.json" "$task_root/LICENSE" "$task_root/README.md" "$task_release/"
+# Archives extracted by root may inherit a restrictive umask. The dedicated
+# service account must be able to read public application files and traverse dirs.
+chmod -R a+rX "$task_release"
 install -d -m 700 -o natter-gui -g natter-gui /var/lib/natter-gui
 systemctl stop natter-gui.service 2>/dev/null || true
 ln -s "$task_release" /opt/natter-gui/current.next
