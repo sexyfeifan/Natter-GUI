@@ -25,6 +25,10 @@ def validate_service(data):
     if protocol not in ("tcp", "udp", "both"):
         raise ValueError("协议必须为 tcp、udp 或 both")
     result = {"name": name, "target_ip": target, "bind_ip": bind, "protocol": protocol}
+    limit = data.get("tcp_thread_limit", 128)
+    if isinstance(limit, bool) or limit not in (128, 256, 512, 1024):
+        raise ValueError("TCP 转发线程上限必须为 128、256、512 或 1024")
+    result["tcp_thread_limit"] = limit
     for key, default, low, high in (("target_port", 0, 1, 65535), ("bind_port", 0, 0, 65535), ("keepalive", 15, 1, 3600)):
         value = data.get(key, default)
         if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
@@ -60,7 +64,8 @@ def validate_collection(services):
 
 
 def command(service, protocol, python, core=CORE):
-    args = [python, "-u", str(core / "natter.py"), "-m", "socket", "-i", service["bind_ip"], "-b", str(service["bind_port"]),
+    core_script = ROOT / "natter_gui" / "socket_runner.py" if protocol == "tcp" and service.get("tcp_thread_limit", 128) != 128 else core / "natter.py"
+    args = [python, "-u", str(core_script), "-m", "socket", "-i", service["bind_ip"], "-b", str(service["bind_port"]),
             "-t", service["target_ip"], "-p", str(service["target_port"]), "-k", str(service["keepalive"]),
             "-e", str(ROOT / "natter_gui" / "notify.py")]
     if protocol == "udp":
@@ -81,8 +86,13 @@ class CoreStatus:
         self.local_address = None
         self.last_check_at = None
         self.upnp = {"router": None, "error": None}
+        self.forward_error = None
+        self.forward_error_count = 0
 
     def ingest(self, line):
+        if "[E]" in line and "fwd-socket:" in line and ("cannot forward port" in line or "socket listening thread is exiting" in line):
+            self.forward_error_count += 1
+            self.forward_error = {"message": line[-500:], "at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
         # A new route means new checks: discard results for the previous mapping.
         if "<--Natter-->" in line:
             self.lan = {}
@@ -112,4 +122,6 @@ class CoreStatus:
     def snapshot(self):
         return {"lan": dict(self.lan), "wan": self.wan, "core_warning": self.warning,
                 "local_address": dict(self.local_address) if self.local_address else None,
-                "last_check_at": self.last_check_at, "upnp": dict(self.upnp)}
+                "last_check_at": self.last_check_at, "upnp": dict(self.upnp),
+                "forward_error": dict(self.forward_error) if self.forward_error else None,
+                "forward_error_count": self.forward_error_count}

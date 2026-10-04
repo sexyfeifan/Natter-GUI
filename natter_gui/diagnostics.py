@@ -225,13 +225,15 @@ def fingerprint(services):
 
 def service_report(service, deadline, cancel):
     value = {"id": service["id"], "name": service["name"], "target": f"{service['target_ip']}:{service['target_port']}",
-             "enabled": service["enabled"], "checked_at": now(), "workers": []}
+             "enabled": service["enabled"], "tcp_thread_limit": service.get("tcp_thread_limit", 128), "checked_at": now(), "workers": []}
     has_tcp = any(w["protocol"] == "tcp" for w in service["workers"])
     path = "/web" if service["target_port"] == 32400 else "/" if service["target_port"] == 8096 else None
     value["target_probe"] = tcp_probe(service["target_ip"], service["target_port"], deadline, cancel, path) if has_tcp else {
         "status": "NOT_CHECKED", "detail": "UDP 无通用端口连通判定，需要应用协议或独立外网回包验证。"}
     for worker in service["workers"]:
         row = {"protocol": worker["protocol"], "runtime": worker["runtime"], "pid": worker.get("pid"), "restarts": worker.get("restarts", 0),
+               "threads": worker.get("threads"), "thread_limit": worker.get("thread_limit"),
+               "forward_error": worker.get("forward_error"), "forward_error_count": worker.get("forward_error_count", 0),
                "mapping_active": worker.get("mapping_active", False), "mapping": worker.get("mapping"),
                "original_wan": worker["wan"], "original_lan": worker["lan"], "original_checked_at": worker.get("last_check_at"),
                "upnp": {"requested": service["upnp"], **worker.get("upnp", {})}, "local_address": worker.get("local_address")}

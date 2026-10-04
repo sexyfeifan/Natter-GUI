@@ -63,7 +63,8 @@ function renderDiagnostics() {
       const block=node("div","diagnostic-worker"), title=node("div","worker-head");title.append(node("strong","",w.protocol.toUpperCase()),badge(runtimeLabels[w.runtime]||w.runtime,w.runtime==="running"?"good":""));block.append(title);
       const mapping=w.mapping_active&&w.mapping?`${w.mapping.public_ip}:${w.mapping.public_port}`:"无活动映射";
       const upnp=!w.upnp.requested?"未启用":w.upnp.error?"原版日志有 UPnP 错误":w.upnp.router?`发现路由 ${w.upnp.router}，租约未独立核实`:"已启用，尚无路由发现记录";
-      block.append(facts([["当前公网入口",mapping],["实际绑定地址",w.local_address?`${w.local_address.ip}:${w.local_address.port}`:"未取得"],["进程 / 自动重启",`${display(w.pid,"—")} / ${w.restarts} 次`],["映射更新时间",formatDate(w.mapping?.updated_at)],["UPnP",upnp]]));
+      block.append(facts([["当前公网入口",mapping],["实际绑定地址",w.local_address?`${w.local_address.ip}:${w.local_address.port}`:"未取得"],["进程 / 自动重启",`${display(w.pid,"—")} / ${w.restarts} 次`],["线程 / 上限",w.protocol==="tcp"?`${display(w.threads)} / ${w.thread_limit}`:display(w.threads)],["映射更新时间",formatDate(w.mapping?.updated_at)],["UPnP",upnp]]));
+      if(w.forward_error)block.append(node("p","core-warning",`转发错误累计 ${w.forward_error_count} 次 · ${formatDate(w.forward_error.at)} · ${w.forward_error.message}`));
       if(w.upnp.error)block.append(node("p","core-warning",w.upnp.error));
       const original=w.protocol==="udp"?badge("原版没有 UDP WAN 检查","warn"):badge(w.original_wan,w.original_wan==="OPEN"?"good":w.original_wan==="CLOSED"?"bad":"warn");
       block.append(table(["检测项","结果","检测来源 / 含义"],[["本地转发端口",probeLabel(w.bind_probe),w.protocol==="tcp"?"GUI 从本机发起 TCP 连接":"UDP 需协议回包或应用验证"],["公网地址回环",probeLabel(w.public_lan_probe),w.protocol==="tcp"?"GUI 从内网连接公网入口；失败不等于外网失败":"未执行通用 UDP 连通检查"],["原版 WAN",original,`原版运行日志快照 · ${formatDate(w.original_checked_at)}`]]));
@@ -80,7 +81,7 @@ function showConsole() { $("login").hidden=true; $("console").hidden=false; refr
 function editor(service=null) {
   editId = service?.id ?? null; $("service-form").reset(); $("preset").value="custom";
   $("editor-title").textContent = service ? "编辑服务" : "新增服务";
-  if (service) for (const field of ["name","target_ip","target_port","bind_ip","bind_port","protocol","keepalive","upnp","retry_target","enabled"]) {
+  if (service) for (const field of ["name","target_ip","target_port","bind_ip","bind_port","protocol","keepalive","tcp_thread_limit","upnp","retry_target","enabled"]) {
     const element=$("service-form").elements[field]; if (element.type==="checkbox") element.checked=service[field]; else element.value=service[field];
   }
   $("editor").showModal(); $("service-form").elements.name.focus();
@@ -114,6 +115,8 @@ function renderServices() {
       section.append(badge(w.protocol==="udp"?"原版未提供 UDP WAN 检查":(wanLabels[w.wan]||w.wan),w.wan==="OPEN"?"good":w.wan==="CLOSED"?"bad":"warn"));
       for (const [address,result] of Object.entries(w.lan||{})) {const label=address===`${s.target_ip}:${s.target_port}`?"目标服务":w.local_address&&address===`${w.local_address.ip}:${w.local_address.port}`?"本地转发":"公网地址回环";section.append(node("p","worker-note",`${label} · LAN ${address} · ${result}`));}
       if(w.upnp?.router)section.append(node("p","worker-note",`UPnP 发现路由 ${w.upnp.router} · 租约未独立核实`));
+      if (w.protocol==="tcp")section.append(node("p","worker-note",`TCP 线程：${display(w.threads)} / ${w.thread_limit}`));
+      if(w.forward_error)section.append(node("p","core-warning",`转发错误累计 ${w.forward_error_count} 次 · 最近 ${formatDate(w.forward_error.at)} · ${w.forward_error.message.includes("Too many threads")?"已达到当前线程上限，新连接可能被拒绝；可在编辑服务中提高 TCP 线程上限。":w.forward_error.message}`));
       if (w.core_warning) section.append(node("p","core-warning",w.core_warning));
       if (w.last_error) section.append(node("p","core-warning",w.last_error));
       if (w.pid) section.append(node("p","worker-note",`PID ${w.pid} · 自动重启 ${w.restarts} 次`));
@@ -152,7 +155,7 @@ for(const id of ["editor-close","editor-cancel"]) $(id).addEventListener("click"
 $("log-close").addEventListener("click",()=>$("log-dialog").close()); $("log-refresh").addEventListener("click",()=>refreshLogs().catch(e=>toast(e.message)));
 $("search").addEventListener("input",renderServices);
 $("preset").addEventListener("change",e=>{const p={emby:["Emby",8096,"tcp",34569],plex:["Plex",32400,"tcp",34570],qb:["qBittorrent",64046,"both",64046]}[e.target.value];if(p){const f=$("service-form").elements;f.name.value=p[0];f.target_port.value=p[1];f.protocol.value=p[2];f.bind_port.value=p[3];}});
-$("service-form").addEventListener("submit",async e=>{e.preventDefault();const f=e.target.elements,data={};for(const key of ["name","target_ip","bind_ip","protocol"])data[key]=f[key].value;for(const key of ["target_port","bind_port","keepalive"])data[key]=Number(f[key].value);for(const key of ["upnp","retry_target","enabled"])data[key]=f[key].checked;const b=e.submitter;b.disabled=true;try{await api(editId?`/services/${editId}`:"/services",editId?"PUT":"POST",data);$("editor").close();toast("服务配置已保存");await refresh();}catch(error){toast(error.message);}finally{b.disabled=false;}});
+$("service-form").addEventListener("submit",async e=>{e.preventDefault();const f=e.target.elements,data={};for(const key of ["name","target_ip","bind_ip","protocol"])data[key]=f[key].value;for(const key of ["target_port","bind_port","keepalive","tcp_thread_limit"])data[key]=Number(f[key].value);for(const key of ["upnp","retry_target","enabled"])data[key]=f[key].checked;const b=e.submitter;b.disabled=true;try{await api(editId?`/services/${editId}`:"/services",editId?"PUT":"POST",data);$("editor").close();toast("服务配置已保存");await refresh();}catch(error){toast(error.message);}finally{b.disabled=false;}});
 for (const n of document.querySelectorAll("[data-page]")) n.addEventListener("click",()=>{for(const p of document.querySelectorAll(".page"))p.hidden=p.id!=="page-"+n.dataset.page;for(const b of document.querySelectorAll("[data-page]"))b.classList.toggle("active",b===n);$("breadcrumb").textContent=n.textContent.trim();});
 $("nat-check").addEventListener("click",async()=>{try{await api("/nat-check","POST");await refresh();}catch(e){toast(e.message);}});
 $("diagnostics-run").addEventListener("click",async()=>{const b=$("diagnostics-run");b.disabled=true;try{await runDiagnostics($("diagnostics-scope").value);}catch(e){toast(e.message);}finally{b.disabled=state?.diagnostics?.state==="running";}});

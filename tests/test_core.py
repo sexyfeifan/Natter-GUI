@@ -9,6 +9,7 @@ import tempfile
 import unittest
 
 from natter_gui.core import CORE, ROOT, CoreStatus, command, validate_service, validate_collection
+from natter_gui.socket_runner import load_core
 
 
 def service(**overrides):
@@ -84,6 +85,26 @@ class CoreTests(unittest.TestCase):
         manifest = json.loads((ROOT / "upstream.lock.json").read_text())
         version = subprocess.check_output([sys.executable, str(CORE / "natter.py"), "--version"], text=True)
         self.assertIn(manifest["tag"].lstrip("v"), version)
+
+    def test_thread_limit_is_bounded_and_only_replaces_tcp_entrypoint(self):
+        self.assertEqual(validate_service(service())["tcp_thread_limit"], 128)
+        for value in (0, 127, 129, 2048, True, "512"):
+            with self.assertRaises(ValueError):
+                validate_service(service(tcp_thread_limit=value))
+        configured = validate_service(service(protocol="both", tcp_thread_limit=512))
+        self.assertTrue(command(configured, "tcp", sys.executable)[2].endswith("socket_runner.py"))
+        self.assertTrue(command(configured, "udp", sys.executable)[2].endswith("natter.py"))
+        self.assertEqual(load_core(CORE / "natter.py", 512)["ForwardSocket"]().max_threads, 512)
+
+    def test_socket_forward_error_is_distinct_from_wan_and_udp_expiry_is_ignored(self):
+        status = CoreStatus()
+        status.ingest("[I] WAN > 203.0.113.1:64046 [ OPEN ]")
+        status.ingest("[E] fwd-socket: socket send thread is exiting: timed out")
+        self.assertEqual(status.forward_error_count, 0)
+        status.ingest("[E] fwd-socket: cannot forward port: Too many threads")
+        self.assertEqual(status.snapshot()["wan"], "OPEN")
+        self.assertEqual(status.snapshot()["forward_error_count"], 1)
+        self.assertIn("Too many threads", status.snapshot()["forward_error"]["message"])
 
     def test_adapter_against_actual_upstream_wan_check(self):
         spec = importlib.util.spec_from_file_location("upstream_natter", CORE / "natter.py")

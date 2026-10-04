@@ -48,6 +48,8 @@ class Worker:
                     (self.directory / "mapping.json").unlink(missing_ok=True)
                 try:
                     env = dict(os.environ, NATTER_GUI_WORKER_DIR=str(self.directory), PYTHONDONTWRITEBYTECODE="1")
+                    if self.protocol == "tcp" and self.service.get("tcp_thread_limit", 128) != 128:
+                        env["NATTER_GUI_TCP_THREADS"] = str(self.service["tcp_thread_limit"])
                     proc = subprocess.Popen(command(self.service, self.protocol, sys.executable, self.core), env=env,
                                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                             text=True, encoding="utf-8", errors="replace", bufsize=1)
@@ -107,6 +109,14 @@ class Worker:
         with self.lock:
             result = {"protocol": self.protocol, "runtime": self.state, "pid": self.proc.pid if self.proc and self.proc.poll() is None else None,
                       "restarts": self.restarts, "exit_code": self.exit_code, "last_error": self.last_error, **self.status.snapshot()}
+            result["thread_limit"] = self.service.get("tcp_thread_limit", 128) if self.protocol == "tcp" else 128
+            result["threads"] = None
+            if result["pid"] and os.name == "posix":
+                try:
+                    status = Path(f"/proc/{result['pid']}/status").read_text(encoding="ascii")
+                    result["threads"] = int(next(line.split()[1] for line in status.splitlines() if line.startswith("Threads:")))
+                except (OSError, StopIteration, ValueError):
+                    pass
             try:
                 result["mapping"] = json.loads((self.directory / "mapping.json").read_text(encoding="utf-8"))
             except (OSError, ValueError):
