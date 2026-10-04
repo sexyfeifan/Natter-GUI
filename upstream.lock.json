@@ -1,0 +1,10 @@
+{
+  "repository": "MikeWang000000/Natter",
+  "tag": "v2.2.1",
+  "commit": "ce1427650178167d2330c490d2e5cd979223e9a4",
+  "sha256": {
+    "natter.py": "18c69aab316a9dc734ff0493f31dc70e09009617f5607fb03735c7f7434fdee6",
+    "natter-check.py": "258e63599dd3451943fa3f2263c808cf3a806ab0ddef8ff626de7f6bbeca283c",
+    "LICENSE": "605e9047a563c5c8396ffb18232aa4304ec56586aee537c45064c6fb425e44ad"
+  }
+}

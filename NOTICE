@@ -1,0 +1,13 @@
+Natter GUI is an independent management project maintained in this repository.
+
+The files under vendor/natter are unchanged copies from:
+https://github.com/MikeWang000000/Natter
+Original project: MikeWang000000/Natter
+Their original copyright notices are retained. The pinned release, commit and
+SHA-256 checksums are recorded in upstream.lock.json.
+
+Natter GUI and the included Natter core are distributed under GPL-3.0.
+See LICENSE and vendor/natter/LICENSE.
+
+This project is not an official Natter release and does not imply endorsement
+by the upstream author.

@@ -1,0 +1,11 @@
+services:
+  natter-gui:
+    image: ghcr.io/sexyfeifan/natter-gui:latest
+    build: .
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - natter-gui-data:/data
+    stop_grace_period: 30s
+volumes:
+  natter-gui-data:

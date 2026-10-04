@@ -1,0 +1,49 @@
+name: Sync upstream Release
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  packages: write
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+      ref: ${{ steps.commit.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python scripts/sync_upstream.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: python -m unittest discover -v
+      - run: python scripts/sync_upstream.py --verify
+      - id: commit
+        run: |
+          if git diff --quiet -- vendor/natter upstream.lock.json; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add vendor/natter upstream.lock.json
+            git commit -m 'chore: synchronize upstream Natter release'
+            git push origin HEAD:main
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+  image:
+    needs: sync
+    if: needs.sync.outputs.changed == 'true'
+    # GITHUB_TOKEN pushes do not trigger normal push workflows: invoke the build explicitly.
+    uses: ./.github/workflows/image.yml
+    with:
+      ref: ${{ needs.sync.outputs.ref }}
