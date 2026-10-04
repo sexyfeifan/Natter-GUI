@@ -72,6 +72,7 @@ async function refresh() {
   try {
     const next=await api("/state"), changed=JSON.stringify(next.services)!==JSON.stringify(state?.services); state=next;
     $("connection").textContent="已连接"; $("side-version").textContent="v"+state.gui_version;
+    $("side-core-version").textContent=state.upstream.tag;
     if (changed) renderServices();
     $("gui-version").textContent="v"+state.gui_version; $("core-version").textContent=state.upstream.tag;
     $("core-sha").textContent=state.upstream.commit; $("platform").textContent=state.platform;
